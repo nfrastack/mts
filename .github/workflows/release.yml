@@ -1,0 +1,86 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: '1.26.8'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build linux/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {goarch: amd64}
+          - {goarch: arm64}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+
+      - name: Build Binary
+        working-directory: src
+        run: |
+          COMMIT=$(git rev-parse --short=7 HEAD)
+          BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.goarch }} \
+            go build -trimpath -ldflags "-s -w -X main.Version=${{ github.ref_name }} -X main.buildCommit=${COMMIT} -X main.BuildTime=${BUILD_DATE}" \
+            -o ../mts_${{ github.ref_name }}_linux_${{ matrix.goarch }} ./cmd/mts
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: mts_${{ github.ref_name }}_linux_${{ matrix.goarch }}
+          path: mts_${{ github.ref_name }}_linux_${{ matrix.goarch }}*
+
+      - name: Run unit tests
+        working-directory: src
+        run: go test -count=1 -short ./...
+
+  release:
+    name: Create Release
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: mts_${{ github.ref_name }}_*
+          path: dist
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: true
+          prerelease: false
+          files: |
+            dist/mts_${{ github.ref_name }}_*
