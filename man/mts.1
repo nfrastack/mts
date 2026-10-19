@@ -1,0 +1,195 @@
+.\" SPDX-FileCopyrightText: © 2026 Nfrastack <code@nfrastack.com>
+.\"
+.\" SPDX-License-Identifier: BSD-3-Clause
+.TH MTS 1 "October 2026" "mts dev" "User Commands"
+.SH NAME
+mts \- modern timestamp filter, a Perl free moreutils ts replacement
+.SH SYNOPSIS
+.B mts
+.RI [ flags ] " [" format ]
+.br
+.B mts
+.RI [ flags ] " -- " command " [" args ...]
+.SH DESCRIPTION
+.B mts
+prepends a timestamp to every line of standard input and writes the
+result to standard output, like
+.BR ts (1)
+from moreutils but as a single static binary with millisecond startup.
+.PP
+In exec mode (after
+.BR -- ),
+.B mts
+runs
+.I command ,
+stamps its standard output and standard error separately while keeping
+the streams separate, optionally tees both to a file, forwards signals
+to the child, and exits with the child's exit code.
+.SH OPTIONS
+.TP
+.BR \-i
+Incremental timestamps: time elapsed since the previous line.
+Default format changes to
+.IR "%H:%M:%S" .
+.TP
+.BR \-s
+Since-start timestamps: time elapsed since
+.B mts
+started.
+Default format changes to
+.IR "%H:%M:%S" .
+.TP
+.BR \-m
+Accepted for compatibility with
+.BR ts (1)
+command lines; changes nothing.
+.TP
+.BR \-r
+Rewrite existing timestamps in the input as relative times
+(``15m5s ago''). With a format argument, reformat them instead.
+With \-i/\-s, report deltas between parsed stamps. Unparseable
+lines pass through unchanged. Missing years assume the current
+year, missing zones the local timezone.
+.TP
+.BR \-u ", " \-\-utc
+Use UTC instead of local time. Mutually exclusive with
+.BR \-\-tz .
+.TP
+.BR \-\-tz " " \fINAME\fR ", " \-\-timezone " " \fINAME\fR
+Use the named timezone, such as
+.IR America/Vancouver .
+Overrides
+.BR \-u .
+Falls back to
+.B $TZ,
+then legacy
+.B $TIMEZONE,
+then local time.
+Requires system zoneinfo (install the tzdata package).
+.TP
+.B \-\-iso8601\fR, \fB\-\-rfc3339
+Format timestamps as ISO-8601 / RFC 3339 with nanoseconds.
+.TP
+.B \-\-prefix " " \fISTR\fR
+Extra label between timestamp and line, such as
+.IR "[web]" .
+.TP
+.B \-\-output " " \fIFILE\fR
+Tee output to
+.I FILE
+(append unless
+.B \-\-truncate
+is given) in addition to the console.
+.TP
+.B \-\-truncate
+Truncate
+.B \-\-output
+.I FILE
+instead of appending.
+.TP
+.B \-\-output\-mode " " \fIMODE\fR
+Exact permissions for
+.B \-\-output
+.I FILE
+in octal, such as
+.IR 640 ,
+bypassing umask. Default without the flag is
+.I 0644
+masked by umask.
+.TP
+.B \-\-run\-user " " \fIUSER\fR[:\fIGROUP\fR]
+Run the wrapped command as
+.IR USER [: GROUP ]
+(name or id \- needs privilege).
+Group defaults to the primary group.
+Only the primary uid and gid are set;
+supplementary groups are inherited.
+.TP
+.B \-\-output\-user " " \fIUSER\fR[:\fIGROUP\fR]
+Change ownership of
+.B \-\-output
+to
+.IR USER [: GROUP ]
+(name or id).
+.I USER:GROUP
+is shorthand for
+.B \-\-output\-user
+.I USER
+plus
+.B \-\-output\-group
+.IR GROUP .
+Defaults to
+.B \-\-run\-user
+when set.
+.TP
+.B \-\-output\-group " " \fIGROUP\fR
+Change group ownership of
+.B \-\-output
+(name or id). Overrides the group in
+.B \-\-output\-user ;
+alone changes group only.
+.TP
+.BR \-q ", " \-\-quiet
+With
+.BR \-\-output ,
+do not write to stdout/stderr.
+.TP
+.B \-\-version
+Print version, copyright and license, and exit.
+.SH FORMAT
+The optional
+.I format
+argument uses
+.BR strftime (3)
+conversions plus the moreutils extensions
+.BR %.S ,
+.BR %.s
+and
+.B %.T
+(subsecond resolution, such as
+.IR 30.00001 ).
+Default:
+.IR "%b %d %H:%M:%S" ;
+incremental default:
+.IR "%H:%M:%S" .
+.SH TIMEZONES
+Absolute timestamps use the system local time by default
+.RB ( /etc/localtime
+when
+.B $TZ
+is unset).
+Each of
+.B \-\-tz ,
+.B $TZ
+and legacy
+.B $TIMEZONE
+just takes an IANA timezone name string such as
+.IR America/Vancouver .
+Precedence:
+.B \-\-tz
+>
+.B $TZ
+>
+.B $TIMEZONE
+(legacy)
+>
+.B \-u
+> local.
+.SH EXIT STATUS
+Filter mode exits 0 on success, 1 on I/O errors, 2 on usage errors.
+Exec mode exits with the child's exit code (128+signal when the child
+is killed by a signal). A stamping/stream error is reported and exits 1
+only when the child itself succeeded, so the child status is never masked.
+.SH EXAMPLES
+.EX
+ping 10.0.0.1 | mts
+make 2>&1 | mts \-i '[%H:%M:%S]'
+mts \-\-tz America/Vancouver < app.log
+mts \-\-prefix '[web]' \-\-output /var/log/web.log \-\- ./bin/web
+.EE
+.SH SEE ALSO
+.BR ts (1),
+.BR strftime (3)
+.SH AUTHOR
+Copyright \(co 2026 Nfrastack <https://nfrastack.com>.
+License BSD-3-Clause. Homepage: https://github.com/nfrastack/mts
