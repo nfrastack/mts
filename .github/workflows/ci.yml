@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      - 'CHANGELOG.md'
+      - 'LICENSE'
+      - 'LICENSES/**'
+      - 'README.md'
+  pull_request:
+    paths-ignore:
+      - 'CHANGELOG.md'
+      - 'LICENSE'
+      - 'LICENSES/**'
+      - 'README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: '1.26.8'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build linux/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {goarch: amd64}
+          - {goarch: arm64}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+
+      - name: Vet
+        working-directory: src
+        run: go vet ./...
+
+      - name: Run unit tests
+        working-directory: src
+        run: go test -count=1 -short ./...
+
+      - name: Build Binary
+        working-directory: src
+        run: |
+          COMMIT=$(git rev-parse --short=7 HEAD)
+          BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          BRANCH="${{ github.ref_name }}"
+          CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.goarch }} \
+            go build -trimpath -ldflags "-s -w -X main.Version=${BRANCH} -X main.buildCommit=${COMMIT} -X main.BuildTime=${BUILD_DATE}" \
+            -o ../mts_${BRANCH}_${COMMIT}_linux_${{ matrix.goarch }} ./cmd/mts
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: mts_${{ github.ref_name }}_linux_${{ matrix.goarch }}
+          path: mts_${{ github.ref_name }}_*_linux_${{ matrix.goarch }}*
+          retention-days: 14
