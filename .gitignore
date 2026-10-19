@@ -4,5 +4,6 @@
 /mts_aarch64
 /mts_x86_64
 bin/
+result
 result-*
 result/
